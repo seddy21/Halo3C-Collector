@@ -28,6 +28,7 @@ $global:TeamsWebHookURL = "<your teams webhook URL>"
 # Do not modify!
 $global:InfluxURL = "$InfluxBaseURL/write?db=$InfluxDatabase&rp=$InfluxRetentionPolicy"
 
+
 Function SMTPSend {
     [CmdletBinding()]
     Param([String]$subject,[String]$body)
@@ -133,18 +134,13 @@ Function ProcessEvents {
                 $cleanMetric =  $cleanMetric -replace ("\.","")
                 
                 # Check if event has been triggered
-                If($Value[-1] -eq '!') {
-                    $reading = "$($cleanMetric)=$($Value),"
-                    $reading =  $reading -replace ("\!","")
-                    ProcessAlert $location $cleanMetric
-                }
-                Else {
-                    $reading = "$($cleanMetric)=$($Value),"
-                }        
+                If($Value[-1] -eq '!') {ProcessAlert $location $cleanMetric}
+                
+                $reading = "$($cleanMetric)=$($Value),"
                 $InfluxQuery += $reading
             }
         }        
-        $InfluxQuery = $InfluxQuery.TrimEnd(",")
+        $InfluxQuery = (($InfluxQuery.TrimEnd(",")) -replace ("\!","")) 
     }
     catch {
         <#Do this if a terminating exception happens#>
