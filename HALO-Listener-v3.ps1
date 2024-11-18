@@ -2,36 +2,42 @@ Clear-Host
 [Console]::CursorVisible = $false
 Add-Type -AssemblyName System.Web
 
+####
+#
+# Update the below global variables
+# Uncomment any alerts you would like to receive in the ProcessAlert Function
+#
+
 # HTTP Listener Settings
-$global:ListenerURL = "http://<your server>:8081/heartbeat/"                     # Define the URL prefix to listen on .. should match what is set on the Halo units  (e.g., http://192.168.1.200:8081/)
+$global:ListenerURL = "http://<your listener server>:8081/heartbeat/"       # Define the URL prefix to listen on .. should match what is set on the Halo units  (e.g., http://192.168.1.200:8081/)
 
 # InfluxDB Settings
 $global:InfluxWriteEnable = $false
-$global:InfluxBaseURL = "http://<your influxdb server>:8086"                       # Define the URL your Influx Database server is running on (default port 8086)
+$global:InfluxBaseURL = "http://<your InfluxDB server>:8086"                # Define the URL your Influx Database server is running on (default port 8086)
 $global:InfluxDatabase = "VapeDetectors"                                    # Define the database you're writing to
 $global:InfluxMeasurement = "HALO3C"                                        # Define the name of the measurement you are collecting
 $global:InfluxRetentionPolicy = "DYNAMIC"                                   # Define the Retention Policy being used
 
 # SMTP Settings
-$global:SMTPAlertsEnable = $false
-$global:SMTPFrom = "<your from email address>"                                # Define from email address 
-$global:SMTPTo = "<comma seperated list of to emails>"    # Define to email address(s) (comma seperated)
-$global:SMTPServer = "<smtp server>"                                             # Define SMTP server
+$global:SMTPAlertsEnable = $false                                           # Set to $true to enable
+$global:SMTPFrom = "<your from email>"                                      # Define from email address 
+$global:SMTPTo = "<your to email>"                                          # Define to email address(s) (comma seperated)
+$global:SMTPServer = "<your smtp server>"                                   # Define SMTP server
 $global:SMTPPort = 25                                                       # Define SMTP port
-$global:SMTPUser = '<smtp authentication account>'                                               # User name for authentication
-$global:SMTPPass = '<smtp authentication password>'                               # Password for authentication
+$global:SMTPUser = "<username for smtp authentication>"                     # User name for authentication
+$global:SMTPPass = "<password for smtp authentication>"                     # Password for authentication
 
 # MS Teams Settings
+# The MS Teams WebHook is depricated. This should be replaced with the Microsoft Graph API & Power Automate prior to 1/25/25
 $global:TeamsAlertsEnable = $false
-$global:TeamsWebHookURL = "<your teams webhook URL>"
+$global:TeamsWebHookURL = "<your URL for Teams WebHook>"
 
 # Do not modify!
 $global:InfluxURL = "$InfluxBaseURL/write?db=$InfluxDatabase&rp=$InfluxRetentionPolicy"
 
-
 Function SMTPSend {
     [CmdletBinding()]
-    Param([String]$subject,[String]$body)
+    Param([String]$subject,[String]$emailBody)
 
     try {
         $password = ConvertTo-SecureString $SMTPPass -AsPlainText -Force
@@ -41,7 +47,7 @@ Function SMTPSend {
         $email.From = $SMTPFrom
         $email.To.Add($SMTPTo)
         $email.Subject = $subject
-        $email.Body = $body
+        $email.Body = $emailBody
 
         # Set SMTP server and credentials
         $smtp = New-Object System.Net.Mail.SmtpClient($SMTPServer, $SMTPPort)
@@ -54,18 +60,17 @@ Function SMTPSend {
         Write-Host "Failed to send email. Error: $($_.Exception.Message)"
     }
 }
-
 Function TeamsSend {
     [CmdletBinding()]
-    Param([string] $body)
+    Param([string] $messageBody)
 
     try{
         $message = @{
-            text = $body
+            text = $messageBody
         }
 
         $jsonMessage = $message | ConvertTo-Json -Depth 3
-        Invoke-RestMethod -Uri $TeamsWebHookURL -Method Post -ContentType 'application/json' -Body $jsonMessage
+        $res = Invoke-RestMethod -Uri $TeamsWebHookURL -Method Post -ContentType 'application/json' -Body $jsonMessage
     }
     catch{
         <#Do this if a terminating exception happens#>
@@ -74,31 +79,36 @@ Function TeamsSend {
         Write-Host "Line number: $($_.InvocationInfo.ScriptLineNumber)"
         Write-Host "Stack trace: $($_.Exception.ScriptStackTrace)"
     }
+    If($res -eq 1){
+        # Do something .. or not.
+    }
 }
+
+# Uncomment any alert you wish to receive.
 Function ProcessAlert {
     [CmdletBinding()]
-    Param([String]$Location,[String]$Metric)
+    Param([String]$thisLocation,[String]$thisMetric)
 
     try {
         $td = Get-Date
 
-        Switch ($Metric){
-            #"Health_Index"{$AlertMessage = @("Health Index Alert","$td --- Health Index alert triggered at $Location.")}
-            #"AQI"{$AlertMessage = @("AQI Alert","$td --- AQI alert triggered at $Location.")}
-            #"PM2.5"{$AlertMessage = @("PM2.5 Alert","$td --- PM2.5 alert triggered at $Location.")}
-            #"TVOC"{$AlertMessage = @("TVOC Alert","$td --- TVOC alert triggered at $Location.")}
-            #"CO2cal"{$AlertMessage = @("CO2 Alert","$td --- Temperature alert triggered at $Location.")}
-            #"Humidity"{$AlertMessage = @("Humidity Alert","$td --- Humidity alert triggered at $Location.")}
-            #"Temp_F"{$AlertMessage = @("Temperature Alert","$td --- Temperature alert triggered at $Location.")}
-            "Vape"{$AlertMessage = @("Vape Detected","$td --- Vaping detected at $Location.")}
-            "THC"{$AlertMessage = @("THC Detected","$td --- THC detected at $Location.")}
-            "Masking"{$AlertMessage = @("Masking Detected","$td --- Masking detected at $Location.")}
-            "Smoking"{$AlertMessage = @("Smoking Detected","$td --- Smoking detected at $Location.")}
-            "Gunshot"{$AlertMessage = @("Gunshot Detected","$td --- Gunshot detected at $Location.")}
-            "Aggression"{$AlertMessage = @("Aggression Detected","$td --- Aggression detected at $Location.")}
-            "Tamper"{$AlertMessage = @("Tamper Detected","$td --- Tamper detected at $Location.")}
-            "Help"{$AlertMessage = @("Help Request Detected","$td --- Help request detected at $Location.")}
-            #"Motion"{$AlertMessage = @("Motion Alert","$td --- Motion alert triggered at $Location.")}
+        Switch ($thisMetric){
+            #"Health_Index"{$AlertMessage = @("Health Index Alert","$td --- Health Index alert triggered at $thisLocation.")}
+            #"AQI"{$AlertMessage = @("AQI Alert","$td --- AQI alert triggered at $thisLocation.")}
+            #"PM2.5"{$AlertMessage = @("PM2.5 Alert","$td --- PM2.5 alert triggered at $thisLocation.")}
+            #"TVOC"{$AlertMessage = @("TVOC Alert","$td --- TVOC alert triggered at $thisLocation.")}
+            #"CO2cal"{$AlertMessage = @("CO2 Alert","$td --- Temperature alert triggered at $thisLocation.")}
+            #"Humidity"{$AlertMessage = @("Humidity Alert","$td --- Humidity alert triggered at $thisLocation.")}
+            #"Temp_F"{$AlertMessage = @("Temperature Alert","$td --- Temperature alert triggered at $thisLocation.")}
+            "Vape"{$AlertMessage = @("Vape Detected","$td --- Vaping detected at $thisLocation.")}
+            "THC"{$AlertMessage = @("THC Detected","$td --- THC detected at $thisLocation.")}
+            "Masking"{$AlertMessage = @("Masking Detected","$td --- Masking detected at $thisLocation.")}
+            "Smoking"{$AlertMessage = @("Smoking Detected","$td --- Smoking detected at $thisLocation.")}
+            "Gunshot"{$AlertMessage = @("Gunshot Detected","$td --- Gunshot detected at $thisLocation.")}
+            "Aggression"{$AlertMessage = @("Aggression Detected","$td --- Aggression detected at $thisLocation.")}
+            "Tamper"{$AlertMessage = @("Tamper Detected","$td --- Tamper detected at $thisLocation.")}
+            "Help"{$AlertMessage = @("Help Request Detected","$td --- Help request detected at $thisLocation.")}
+            #"Motion"{$AlertMessage = @("Motion Alert","$td --- Motion alert triggered at $thisLocation.")}
         }
         
         If($null -ne $AlertMessage) {
@@ -106,7 +116,7 @@ Function ProcessAlert {
                 SMTPSend $AlertMessage[0] $AlertMessage[1]
             }
 
-            If($global:TeamsAlertsEnable -eq $true) {
+            If($TeamsAlertsEnable -eq $true) {
                 TeamsSend $AlertMessage[1]
             }
         }
@@ -132,12 +142,11 @@ Function ProcessEvents {
                 $Value = [string]$queryParams[$Metric]
                 $cleanMetric = $Metric.ToString()
                 $cleanMetric =  $cleanMetric -replace ("\.","")
-                
-                # Check if event has been triggered
-                If($Value[-1] -eq '!') {ProcessAlert $location $cleanMetric}
-                
                 $reading = "$($cleanMetric)=$($Value),"
                 $InfluxQuery += $reading
+                               
+                # Check if event has been triggered
+                If($Value[-1] -eq '!') {ProcessAlert $location $cleanMetric}
             }
         }        
         $InfluxQuery = (($InfluxQuery.TrimEnd(",")) -replace ("\!","")) 
@@ -218,9 +227,9 @@ while ($listener.IsListening) {
 
                 $location = [string]$queryParams["location"]
                 $strEventsQry = ProcessEvents $queryParams
-                $EventsBody="HaloEvents,Location=$($location) $strEventsQry"
+                $EventsBody="HaloEvents,Location=$location $strEventsQry"
 
-                If($global:InfluxWriteEnable -eq $true) {
+                If($InfluxWriteEnable -eq $true) {
                     Write-InfluxDB $EventsBody 
                 }
                 else {
