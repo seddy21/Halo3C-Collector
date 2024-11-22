@@ -290,7 +290,7 @@ $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add($ListenerURL)
 $listener.Start()
 
-Write-Host "HALO 3C Heartbeat data collection.." -ForegroundColor Green
+Write-Host "HALO 3C Heartbeat data collection.." -ForegroundColor DarkYellow
 Write-Host "Listening for incoming HTTP requests at: " -NoNewline;Write-Host $ListenerURL -ForegroundColor Cyan
 Write-Host "Writing data to: " -NoNewline;Write-Host $InfluxURL -ForegroundColor Cyan
 
