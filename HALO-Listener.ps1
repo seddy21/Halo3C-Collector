@@ -32,7 +32,7 @@ $global:InfluxMeasurement = 'HALO3C'                                        # De
 $global:InfluxRetentionPolicy = 'DYNAMIC'                                   # Define the Retention Policy being used
 
 # SMTP Settings
-$global:SMTPAlertsEnable = $false                                           # Set to $true and complete the below section to send SMTP (email) notifications
+$global:SMTPNotificationsEnable = $false                                    # Set to $true and complete the below section to send SMTP (email) notifications
 $global:SMTPFrom = '<your SMTP from address>'                               # Define from email address 
 $global:SMTPTo = '<your SMTP to address(s)>'                                # Define to email address(s) (comma seperated)
 $global:SMTPServer = '<your SMTP server'                                    # Define SMTP server
@@ -41,7 +41,7 @@ $global:SMTPUser = '<your SMTP user>'                                       # Us
 $global:SMTPPass = '<your SMTP password'                                    # Password for authentication
 
 # MS Teams Settings using Graph API
-$global:TeamsAlertsEnable = $false                                          # Set to $true and complete the below section to send Teams notifications
+$global:TeamsNotificationsEnable = $false                                   # Set to $true and complete the below section to send Teams notifications
 $global:ClientId = '<your Client ID>'                                       # Replace with your App Registration Client ID
 $global:ClientSecret = '<your Client Secret>'                               # Replace with your Client Secret
 $global:TenantId = '<your tenant ID>'                                       # Replace with your Tenant ID
@@ -221,11 +221,11 @@ Function ProcessAlert {
             }
             Else {
                 # Send alert and add to cooldown
-                If($SMTPAlertsEnable -eq $true) {
+                If($SMTPNotificationsEnable -eq $true) {
                     SMTPSend $AlertMessage[0] $AlertMessage[1]
                 }
 
-                If($TeamsAlertsEnable -eq $true) {
+                If($TeamsNotificationsEnable -eq $true) {
                     TeamsMessageGraphAPI $AlertMessage[1]
                 }
                 Add-Cooldown $thisLocation $thisMetric
@@ -294,9 +294,9 @@ Write-Host "HALO 3C Heartbeat data collection.." -ForegroundColor Green
 Write-Host "Listening for incoming HTTP requests at: " -NoNewline;Write-Host $ListenerURL -ForegroundColor Cyan
 Write-Host "Writing data to: " -NoNewline;Write-Host $InfluxURL -ForegroundColor Cyan
 
-If($SMTPAlertsEnable -eq $false){Write-Host "SMTP Alerts Disabled!" -ForegroundColor Red}
-If($InfluxWriteEnable -eq $false){Write-Host "InfluxDB Writes Disabled!" -ForegroundColor Red}
-If($TeamsAlertsEnable -eq $false){Write-Host "Teams Alerts Disabled!" -ForegroundColor Red}
+If($InfluxWriteEnable -eq $false){Write-Host "InfluxDB Writes Disabled!" -ForegroundColor Red}Else{Write-Host "InfluxDB Writes Enabled." -ForegroundColor Green}
+If($SMTPNotificationsEnable -eq $false){Write-Host "SMTP Notifications Disabled!" -ForegroundColor Red}Else{Write-Host "SMTP Notifications Enabled." -ForegroundColor Green}
+If($TeamsNotificationsEnable -eq $false){Write-Host "Teams Notifications Disabled!" -ForegroundColor Red}Else{Write-Host "Teams Notifications Enabled." -ForegroundColor Green}
 
 Write-Host "Press [ESC] to stop listener.." -ForegroundColor Yellow
 
