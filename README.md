@@ -33,7 +33,7 @@ c.	Click Import
 
 **Powershell Listener Setup**
 
-1.	Copy the “HALO-Listener-v4” powershell script to the server you intend to run it on.
+1.	Copy the “HALO-Listener” powershell script to the server you intend to run it on.
 2.	Update the global variables found under “Update these variables” accordingly
 3.	Start the script.
 
