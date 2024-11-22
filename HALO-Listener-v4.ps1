@@ -10,6 +10,10 @@ Clear-Host
 
 ####
 #
+# Version 4
+#
+####
+#
 # Update the below global variables
 # Uncomment any alerts in the "ProcessAlerts" Function you would like to receive
 #
