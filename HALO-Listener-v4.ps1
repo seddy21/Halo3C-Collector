@@ -2,46 +2,125 @@ Clear-Host
 [Console]::CursorVisible = $false
 Add-Type -AssemblyName System.Web
 
+Write-Host "Importing Modules ..." -ForegroundColor DarkMagenta
+
+Import-Module Microsoft.Graph.Teams
+
+Clear-Host
+
 ####
 #
 # Update the below global variables
-# Uncomment any alerts you would like to receive in the ProcessAlert Function
+# Uncomment any alerts in the "ProcessAlerts" function you would like to receive in the ProcessAlert Function
 #
 
 # HTTP Listener Settings
 $global:ListenerURL = "http://<your listener server>:8081/heartbeat/"       # Define the URL prefix to listen on .. should match what is set on the Halo units  (e.g., http://192.168.1.200:8081/)
 
+# Alert cooldown setting
+$global:Cooldown = 15                                                       # Define cooldown in minutes for alerts
+
 # InfluxDB Settings
-$global:InfluxWriteEnable = $false
-$global:InfluxBaseURL = "http://<your InfluxDB server>:8086"                # Define the URL your Influx Database server is running on (default port 8086)
-$global:InfluxDatabase = "VapeDetectors"                                    # Define the database you're writing to
-$global:InfluxMeasurement = "HALO3C"                                        # Define the name of the measurement you are collecting
-$global:InfluxRetentionPolicy = "DYNAMIC"                                   # Define the Retention Policy being used
+$global:InfluxWriteEnable = $false                                          # Set to false for debugging
+$global:InfluxBaseURL = 'http://<your influxdb url>:8086'                   # Define the URL your Influx Database server is running on (default port 8086)
+$global:InfluxDatabase = 'VapeDetectors'                                    # Define the database you're writing to
+$global:InfluxMeasurement = 'HALO3C'                                        # Define the name of the measurement you are collecting
+$global:InfluxRetentionPolicy = 'DYNAMIC'                                   # Define the Retention Policy being used
 
 # SMTP Settings
-$global:SMTPAlertsEnable = $false                                           # Set to $true to enable
-$global:SMTPFrom = "<your from email>"                                      # Define from email address 
-$global:SMTPTo = "<your to email>"                                          # Define to email address(s) (comma seperated)
-$global:SMTPServer = "<your smtp server>"                                   # Define SMTP server
+$global:SMTPAlertsEnable = $false                                           # Set to $true and complete the below section to send SMTP (email) notifications
+$global:SMTPFrom = '<your SMTP from address>'                               # Define from email address 
+$global:SMTPTo = '<your SMTP to address(s)>'                                # Define to email address(s) (comma seperated)
+$global:SMTPServer = '<your SMTP server'                                    # Define SMTP server
 $global:SMTPPort = 25                                                       # Define SMTP port
-$global:SMTPUser = "<username for smtp authentication>"                     # User name for authentication
-$global:SMTPPass = "<password for smtp authentication>"                     # Password for authentication
+$global:SMTPUser = '<your SMTP user>'                                       # User name for authentication
+$global:SMTPPass = '<your SMTP password'                                    # Password for authentication
 
-# MS Teams Settings
-# The MS Teams WebHook is depricated. This should be replaced with the Microsoft Graph API & Power Automate prior to 1/25/25
-$global:TeamsAlertsEnable = $false
-$global:TeamsWebHookURL = "<your URL for Teams WebHook>"
-
-# ME Teams Settings using Graph API
-$global:ClientId = "YOUR_CLIENT_ID"                                         # Replace with your App Registration Client ID
-$global:ClientSecret = "YOUR_CLIENT_SECRET"                                 # Replace with your Client Secret
-$global:TenantId = "YOUR_TENANT_ID"                                         # Replace with your Tenant ID
-$global:ChatId = "YOUR_CHAT_ID"                                             # Replace with the Teams Chat ID
-
+# MS Teams Settings using Graph API
+$global:TeamsAlertsEnable = $false                                          # Set to $true and complete the below section to send Teams notifications
+$global:ClientId = '<your Client ID>'                                       # Replace with your App Registration Client ID
+$global:ClientSecret = '<your Client Secret>'                               # Replace with your Client Secret
+$global:TenantId = '<your tenant ID>'                                       # Replace with your Tenant ID
+$global:TenantDomainName = '<your Tenant Domain Name>'                      # Replace with your Tenant Domain Name
+$global:TeamId = '<your Team ID>'                                           # Replace with your Team ID
+$global:ChannelId = '<your Team channel ID>'                                # Replace with your Team channel ID
+$global:TeamUser = '<azure / teams account>'                                # Replace with Azure Teams Administrator account used for token access and message posting
+$global:TeamPass = '<azure / teams account password>'                       # Replace with Azure account password
 
 # Do not modify!!!
 $global:InfluxURL = "$InfluxBaseURL/write?db=$InfluxDatabase&rp=$InfluxRetentionPolicy"
+$global:CooldownArray = New-Object System.Collections.ArrayList
 
+Function HandleError {
+    [CmdletBinding()]
+    Param($myError)
+
+    Write-Host  
+    Write-Host $myError
+    Write-Host "An error occurred: $($myError.Exception.Message)"
+    Write-Host "Line number: $($myError.InvocationInfo.ScriptLineNumber)"
+    Write-Host "Stack trace: $($myError.Exception.ScriptStackTrace)"
+    Write-Host  
+}
+# Function to check if an alert already exists
+Function CooldownExists {
+    param (
+        [string]$Loc,
+        [string]$Al
+    )
+    
+    try {        
+        # Search the array for matching Location and Event
+        $exists = $CooldownArray | Where-Object {
+            $_.Name -eq $Loc -and $_.Alert -eq $Al
+        }
+        return $exists.Count -gt 0
+    }
+    catch {
+        <#Do this if a terminating exception happens#>
+        HandleError $_
+    }
+}
+# Add alert to cooldown array
+Function Add-Cooldown {
+    param (
+        [string]$Loc,
+        [string]$Al
+    )
+    
+    try {
+        # Check if the event already exists
+        if (CooldownExists $Loc $Al) {Return $null}
+
+        # Get the current timestamp
+        $timestamp = Get-Date
+
+        # Add the event to the array
+        $res = $CooldownArray.Add([PSCustomObject]@{
+            Name  = $Loc
+            Alert     = $Al
+            Timestamp = $timestamp
+        })
+    }
+    catch {
+        <#Do this if a terminating exception happens#>
+        HandleError $_
+    }
+    Return $null
+}
+# Function to clear expired alerts
+Function Clear-Cooldown {
+    try {        
+    $currentTime = Get-Date
+    $CooldownArray = $CooldownArray | Where-Object {
+        ($currentTime - $_.Timestamp).TotalMinutes -lt $Cooldown
+    }
+    }
+    catch {
+        <#Do this if a terminating exception happens#>
+        HandleError $_
+    }
+}
 Function SMTPSend {
     [CmdletBinding()]
     Param([String]$subject,[String]$emailBody)
@@ -64,65 +143,47 @@ Function SMTPSend {
         # Send email
         $smtp.Send($email)
     } catch {
-        Write-Host "Failed to send email. Error: $($_.Exception.Message)"
+        HandleError $_
     }
 }
-Function TeamsSend {
+Function TeamsMessageGraphAPI {
     [CmdletBinding()]
     Param([string] $messageBody)
 
-    try{
-        $message = @{
-            text = $messageBody
+    try {        
+        $Body = @{
+            Grant_Type    = "password"
+            Scope         = "https://graph.microsoft.com/.default"
+            client_id     = $ClientID
+            client_secret = $ClientSecret
+            username      = $TeamUser
+            password      = $TeamPass
         }
+        
+        $ConnectGraph = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$TenantDomainName/oauth2/v2.0/token" -Method POST -Body $Body
+        $accessToken = $ConnectGraph.access_token
+        
+        $URLchatmessage = "https://graph.microsoft.com/v1.0/teams/$TeamID/channels/$ChannelID/messages"
+        
+        $headers = @{
+            "Authorization" = "Bearer $accessToken"
+            "Content-Type"  = "application/json"
+        }
+        
+        $messageBody = @{
+            body = @{
+                content = $messageBody
+            }
+        } | ConvertTo-Json
+        
+        $res = Invoke-RestMethod -Method POST -Uri $URLchatmessage -Body $messageBody -Headers $headers
 
-        $jsonMessage = $message | ConvertTo-Json -Depth 3
-        $res = Invoke-RestMethod -Uri $TeamsWebHookURL -Method Post -ContentType 'application/json' -Body $jsonMessage
     }
-    catch{
+    catch {
         <#Do this if a terminating exception happens#>
-        Write-Host $_
-        Write-Host "An error occurred: $($_.Exception.Message)"
-        Write-Host "Line number: $($_.InvocationInfo.ScriptLineNumber)"
-        Write-Host "Stack trace: $($_.Exception.ScriptStackTrace)"
-    }
-    If($res -eq 1){
-        # Do something .. or not.
+        HandleError $_
     }
 }
-Function TeamSendGraphAPI {
-    [CmdletBinding()]
-    Param([string] $messageBody)
-
-    # Authenticate with Microsoft Graph
-    $tokenResponse = Get-MsalToken -ClientId $ClientId -ClientSecret $ClientSecret -TenantId $TenantId -Scopes "https://graph.microsoft.com/.default"
-
-    if (-not $tokenResponse) {
-        Write-Error "Failed to authenticate with Microsoft Graph."
-    }
-
-    $AccessToken = $tokenResponse.AccessToken
-
-    # Send Message to Teams Chat
-    $GraphUri = "https://graph.microsoft.com/v1.0/chats/$ChatId/messages"
-    $Body = @{
-        body = @{
-            content = $messageBody
-        }
-    } | ConvertTo-Json -Depth 10
-
-    $Response = Invoke-RestMethod -Uri $GraphUri -Method POST -Headers @{
-        "Authorization" = "Bearer $AccessToken"
-        "Content-Type" = "application/json"
-    } -Body $Body
-
-    if ($Response) {
-        #Write-Output "Message sent successfully!"
-    } else {
-        Write-Error "Failed to send the message."
-    }
-}
-
 # Uncomment any alert you wish to receive.
 Function ProcessAlert {
     [CmdletBinding()]
@@ -151,21 +212,25 @@ Function ProcessAlert {
         }
         
         If($null -ne $AlertMessage) {
-            If($SMTPAlertsEnable -eq $true) {
-                SMTPSend $AlertMessage[0] $AlertMessage[1]
+            If (CooldownExists -Location $thisLocation -Alert $thisMetric) {
+                # Alert already on cooldown, do not send message
             }
+            Else {
+                # Send alert and add to cooldown
+                If($SMTPAlertsEnable -eq $true) {
+                    SMTPSend $AlertMessage[0] $AlertMessage[1]
+                }
 
-            If($TeamsAlertsEnable -eq $true) {
-                TeamsSend $AlertMessage[1]
-            }
+                If($TeamsAlertsEnable -eq $true) {
+                    TeamsMessageGraphAPI $AlertMessage[1]
+                }
+                Add-Cooldown $thisLocation $thisMetric
+            }            
         }
     }
     catch {
         <#Do this if a terminating exception happens#>
-        Write-Host $_
-        Write-Host "An error occurred: $($_.Exception.Message)"
-        Write-Host "Line number: $($_.InvocationInfo.ScriptLineNumber)"
-        Write-Host "Stack trace: $($_.Exception.ScriptStackTrace)"
+        HandleError $_
     }
 }
 Function ProcessEvents {
@@ -174,31 +239,30 @@ Function ProcessEvents {
 
     try {
 
-        $location = [string]$queryParams["location"]
+        $thisLocation = [string]$queryParams["location"]
+        $InfluxQuery = ""
 
         ForEach($Metric in $queryParams.keys) {            
-            If([string]$Metric -ne "location") {
+            If(([string]$Metric -ne "location") -and ($null -ne [string]$Metric)) {
                 $Value = [string]$queryParams[$Metric]
                 $cleanMetric = $Metric.ToString()
                 $cleanMetric =  $cleanMetric -replace ("\.","")
-                $reading = "$($cleanMetric)=$($Value),"
-                $InfluxQuery += $reading
-                               
+                $reading = "$cleanMetric=$Value,"
+                $InfluxQuery = [string]::Concat($InfluxQuery, $reading)
+                
                 # Check if event has been triggered
-                If($Value[-1] -eq '!') {ProcessAlert $location $cleanMetric}
+                If($Value[-1] -eq '!') {ProcessAlert $thisLocation $cleanMetric}
             }
         }        
         $InfluxQuery = (($InfluxQuery.TrimEnd(",")) -replace ("\!","")) 
     }
     catch {
         <#Do this if a terminating exception happens#>
-        Write-Host $_
-        Write-Host "An error occurred: $($_.Exception.Message)"
-        Write-Host "Line number: $($_.InvocationInfo.ScriptLineNumber)"
-        Write-Host "Stack trace: $($_.Exception.ScriptStackTrace)"   
+        HandleError $_
         $InfluxQuery = "Error"
     }
-    Return $InfluxQuery
+    $resString = [string]$InfluxQuery
+    Return $resString
 }
 Function Write-InfluxDB {
     [CmdletBinding()]
@@ -213,7 +277,7 @@ Function Write-InfluxDB {
         }
     }
     catch {
-        Write-Host "InfluxDB Write error: $_.Exception.Message"
+        HandleError $_
     }
 }
 
@@ -297,11 +361,11 @@ while ($listener.IsListening) {
         }
     }
     catch {
-        Write-Host "Error handling request: $_"
-        Write-Host "An error occurred: $($_.Exception.Message)"
-        Write-Host "Line number: $($_.InvocationInfo.ScriptLineNumber)"
-        Write-Host "Stack trace: $($_.Exception.ScriptStackTrace)"        
+        HandleError $_
     }
+
+    # Check cooldowns
+    Clear-Cooldown
 
     # Create 500 millisecond delay to allow for escape key press used to shutdown listener
     for($i = 0;$i -lt 5; $i++){
