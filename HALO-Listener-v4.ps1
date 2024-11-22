@@ -44,7 +44,7 @@ $global:TenantId = '<your tenant ID>'                                       # Re
 $global:TenantDomainName = '<your Tenant Domain Name>'                      # Replace with your Tenant Domain Name
 $global:TeamId = '<your Team ID>'                                           # Replace with your Team ID
 $global:ChannelId = '<your Team channel ID>'                                # Replace with your Team channel ID
-$global:TeamUser = '<azure / teams account>'                                # Replace with Azure Teams Administrator account used for token access and message posting
+$global:TeamUser = '<azure / teams account>'                                # Replace with Azure Teams Administrator account used for connecting to graph API and teams posting
 $global:TeamPass = '<azure / teams account password>'                       # Replace with Azure account password
 
 # Do not modify!!!
