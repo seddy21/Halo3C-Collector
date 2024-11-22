@@ -11,7 +11,7 @@ Clear-Host
 ####
 #
 # Update the below global variables
-# Uncomment any alerts in the "ProcessAlerts" function you would like to receive in the ProcessAlert Function
+# Uncomment any alerts in the "ProcessAlerts" Function you would like to receive
 #
 
 # HTTP Listener Settings
