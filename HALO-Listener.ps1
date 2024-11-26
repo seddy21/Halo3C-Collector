@@ -75,7 +75,7 @@ Function CooldownExists {
     
     try {        
         # Search the array for matching Location and Event
-        $exists = $CooldownArray | Where-Object {
+        $exists = $global:CooldownArray | Where-Object {
             $_.Name -eq $Loc -and $_.Alert -eq $Al
         }
         return $exists.Count -gt 0
@@ -100,7 +100,7 @@ Function Add-Cooldown {
         $timestamp = Get-Date
 
         # Add the event to the array
-        $res = $CooldownArray.Add([PSCustomObject]@{
+        $res = $global:CooldownArray.Add([PSCustomObject]@{
             Name  = $Loc
             Alert     = $Al
             Timestamp = $timestamp
@@ -116,8 +116,8 @@ Function Add-Cooldown {
 Function Clear-Cooldown {
     try {        
     $currentTime = Get-Date
-    $CooldownArray = $CooldownArray | Where-Object {
-        ($currentTime - $_.Timestamp).TotalMinutes -lt $Cooldown
+    $global:CooldownArray = $global:CooldownArray | Where-Object {
+        ($currentTime - $_.Timestamp).TotalMinutes -lt $global:Cooldown
     }
     }
     catch {
@@ -134,15 +134,15 @@ Function SMTPSend {
 
         # Create email object
         $email = New-Object System.Net.Mail.MailMessage
-        $email.From = $SMTPFrom
-        $email.To.Add($SMTPTo)
+        $email.From = $global:SMTPFrom
+        $email.To.Add($global:SMTPTo)
         $email.Subject = $subject
         $email.Body = $emailBody
 
         # Set SMTP server and credentials
-        $smtp = New-Object System.Net.Mail.SmtpClient($SMTPServer, $SMTPPort)
+        $smtp = New-Object System.Net.Mail.SmtpClient($global:SMTPServer, $global:SMTPPort)
         $smtp.EnableSSL = $false
-        $smtp.Credentials = New-Object System.Net.NetworkCredential($SMTPUser, $password)
+        $smtp.Credentials = New-Object System.Net.NetworkCredential($global:SMTPUser, $global:password)
 
         # Send email
         $smtp.Send($email)
@@ -154,20 +154,24 @@ Function TeamsMessageGraphAPI {
     [CmdletBinding()]
     Param([string] $messageBody)
 
+    $myTenant = $global:TenantDomainName
+    $myTeamID =  $global:TeamId
+    $myChannelID = $global:ChannelID
+
     try {        
         $Body = @{
             Grant_Type    = "password"
             Scope         = "https://graph.microsoft.com/.default"
-            client_id     = $ClientID
-            client_secret = $ClientSecret
-            username      = $TeamUser
-            password      = $TeamPass
+            client_id     = $global:ClientID
+            client_secret = $global:ClientSecret
+            username      = $global:TeamUser
+            password      = $global:TeamPass
         }
         
-        $ConnectGraph = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$TenantDomainName/oauth2/v2.0/token" -Method POST -Body $Body
+        $ConnectGraph = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$myTenant/oauth2/v2.0/token" -Method POST -Body $Body
         $accessToken = $ConnectGraph.access_token
         
-        $URLchatmessage = "https://graph.microsoft.com/v1.0/teams/$TeamID/channels/$ChannelID/messages"
+        $URLchatmessage = "https://graph.microsoft.com/v1.0/teams/$myTeamID/channels/$myChannelID/messages"
         
         $headers = @{
             "Authorization" = "Bearer $accessToken"
@@ -215,21 +219,28 @@ Function ProcessAlert {
             #"Motion"{$AlertMessage = @("Motion Alert","$td --- Motion alert triggered at $thisLocation.")}
         }
         
+        If($global:DebugNotifications -eq $true){
+            $thisLocation = "Test"
+            $AlertMessage = @("Test Message","$td --- This is a test notifications from $thisLocation")
+            $global:DebugNotifications = $false
+        }
+
         If($null -ne $AlertMessage) {
-            If (CooldownExists -Location $thisLocation -Alert $thisMetric) {
+            If (CooldownExists $thisLocation $thisMetric) {
                 # Alert already on cooldown, do not send message
             }
             Else {
                 # Send alert and add to cooldown
-                If($SMTPNotificationsEnable -eq $true) {
+                If($global:SMTPNotificationsEnable -eq $true) {
                     SMTPSend $AlertMessage[0] $AlertMessage[1]
                 }
-
-                If($TeamsNotificationsEnable -eq $true) {
+                
+                If($global:TeamsNotificationsEnable -eq $true) {
                     TeamsMessageGraphAPI $AlertMessage[1]
                 }
                 Add-Cooldown $thisLocation $thisMetric
             }            
+            foreach($cd in $global:CooldownArray){Write-Host "$($cd.Name) - $($cd.Alert)"}
         }
     }
     catch {
@@ -287,16 +298,16 @@ Function Write-InfluxDB {
 
 # Create a new HttpListener object
 $listener = New-Object System.Net.HttpListener
-$listener.Prefixes.Add($ListenerURL)
+$listener.Prefixes.Add($global:ListenerURL)
 $listener.Start()
 
 Write-Host "HALO 3C Heartbeat data collection.." -ForegroundColor DarkYellow
-Write-Host "Listening for incoming HTTP requests at: " -NoNewline;Write-Host $ListenerURL -ForegroundColor Cyan
+Write-Host "Listening for incoming HTTP requests at: " -NoNewline;Write-Host $global:ListenerURL -ForegroundColor Cyan
 Write-Host "Writing data to: " -NoNewline;Write-Host $InfluxURL -ForegroundColor Cyan
 
-If($InfluxWriteEnable -eq $false){Write-Host "InfluxDB Writes Disabled!" -ForegroundColor Red}Else{Write-Host "InfluxDB Writes Enabled." -ForegroundColor Green}
-If($SMTPNotificationsEnable -eq $false){Write-Host "SMTP Notifications Disabled!" -ForegroundColor Red}Else{Write-Host "SMTP Notifications Enabled." -ForegroundColor Green}
-If($TeamsNotificationsEnable -eq $false){Write-Host "Teams Notifications Disabled!" -ForegroundColor Red}Else{Write-Host "Teams Notifications Enabled." -ForegroundColor Green}
+If($global:InfluxWriteEnable -eq $false){Write-Host "InfluxDB Writes Disabled!" -ForegroundColor Red}Else{Write-Host "InfluxDB Writes Enabled." -ForegroundColor Green}
+If($global:SMTPNotificationsEnable -eq $false){Write-Host "SMTP Notifications Disabled!" -ForegroundColor Red}Else{Write-Host "SMTP Notifications Enabled." -ForegroundColor Green}
+If($global:TeamsNotificationsEnable -eq $false){Write-Host "Teams Notifications Disabled!" -ForegroundColor Red}Else{Write-Host "Teams Notifications Enabled." -ForegroundColor Green}
 
 Write-Host "Press [ESC] to stop listener.." -ForegroundColor Yellow
 
@@ -336,7 +347,7 @@ while ($listener.IsListening) {
                 $strEventsQry = ProcessEvents $queryParams
                 $EventsBody="HaloEvents,Location=$location $strEventsQry"
 
-                If($InfluxWriteEnable -eq $true) {
+                If($global:InfluxWriteEnable -eq $true) {
                     Write-InfluxDB $EventsBody 
                 }
                 else {
