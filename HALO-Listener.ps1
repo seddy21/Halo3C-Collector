@@ -55,6 +55,17 @@ $global:TeamPass = '<azure / teams account password>'                       # Re
 $global:InfluxURL = "$global:InfluxBaseURL/write?db=$global:InfluxDatabase&rp=$global:InfluxRetentionPolicy"
 $global:CooldownArray = New-Object System.Collections.ArrayList
 
+Function Post {
+    Write-Host "HALO 3C Heartbeat data collection.." -ForegroundColor DarkYellow
+    Write-Host "Listening for incoming HTTP requests at: " -NoNewline;Write-Host $global:ListenerURL -ForegroundColor Cyan
+    Write-Host "Writing data to: " -NoNewline;Write-Host $InfluxURL -ForegroundColor Cyan
+
+    If($global:InfluxWriteEnable -eq $false){Write-Host "InfluxDB Writes Disabled!" -ForegroundColor Red}Else{Write-Host "InfluxDB Writes Enabled." -ForegroundColor Green}
+    If($global:SMTPNotificationsEnable -eq $false){Write-Host "SMTP Notifications Disabled!" -ForegroundColor Red}Else{Write-Host "SMTP Notifications Enabled." -ForegroundColor Green}
+    If($global:TeamsNotificationsEnable -eq $false){Write-Host "Teams Notifications Disabled!" -ForegroundColor Red}Else{Write-Host "Teams Notifications Enabled." -ForegroundColor Green}
+
+    Write-Host "Press [ESC] to stop listener.." -ForegroundColor Yellow
+}
 Function HandleError {
     [CmdletBinding()]
     Param($myError)
@@ -296,15 +307,7 @@ $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add($global:ListenerURL)
 $listener.Start()
 
-Write-Host "HALO 3C Heartbeat data collection.." -ForegroundColor DarkYellow
-Write-Host "Listening for incoming HTTP requests at: " -NoNewline;Write-Host $global:ListenerURL -ForegroundColor Cyan
-Write-Host "Writing data to: " -NoNewline;Write-Host $InfluxURL -ForegroundColor Cyan
-
-If($global:InfluxWriteEnable -eq $false){Write-Host "InfluxDB Writes Disabled!" -ForegroundColor Red}Else{Write-Host "InfluxDB Writes Enabled." -ForegroundColor Green}
-If($global:SMTPNotificationsEnable -eq $false){Write-Host "SMTP Notifications Disabled!" -ForegroundColor Red}Else{Write-Host "SMTP Notifications Enabled." -ForegroundColor Green}
-If($global:TeamsNotificationsEnable -eq $false){Write-Host "Teams Notifications Disabled!" -ForegroundColor Red}Else{Write-Host "Teams Notifications Enabled." -ForegroundColor Green}
-
-Write-Host "Press [ESC] to stop listener.." -ForegroundColor Yellow
+Post
 
 # Infinite loop to keep the listener running
 while ($listener.IsListening) {
