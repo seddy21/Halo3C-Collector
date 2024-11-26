@@ -52,7 +52,7 @@ $global:TeamUser = '<azure / teams account>'                                # Re
 $global:TeamPass = '<azure / teams account password>'                       # Replace with Azure account password
 
 # Do not modify!!!
-$global:InfluxURL = "$InfluxBaseURL/write?db=$InfluxDatabase&rp=$InfluxRetentionPolicy"
+$global:InfluxURL = "$global:InfluxBaseURL/write?db=$global:InfluxDatabase&rp=$global:InfluxRetentionPolicy"
 $global:CooldownArray = New-Object System.Collections.ArrayList
 
 Function HandleError {
@@ -100,7 +100,7 @@ Function Add-Cooldown {
         $timestamp = Get-Date
 
         # Add the event to the array
-        $res = $global:CooldownArray.Add([PSCustomObject]@{
+       [void]$global:CooldownArray.Add([PSCustomObject]@{
             Name  = $Loc
             Alert     = $Al
             Timestamp = $timestamp
@@ -152,11 +152,7 @@ Function SMTPSend {
 }
 Function TeamsMessageGraphAPI {
     [CmdletBinding()]
-    Param([string] $messageBody)
-
-    $myTenant = $global:TenantDomainName
-    $myTeamID =  $global:TeamId
-    $myChannelID = $global:ChannelID
+    Param([string] $myBody)
 
     try {        
         $Body = @{
@@ -168,10 +164,10 @@ Function TeamsMessageGraphAPI {
             password      = $global:TeamPass
         }
         
-        $ConnectGraph = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$myTenant/oauth2/v2.0/token" -Method POST -Body $Body
+         # -ContentType "application/x-www-form-urlencoded"
+        $ConnectGraph = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$global:TenantDomainName/oauth2/v2.0/token" -Method POST -Body $Body -ContentType "application/x-www-form-urlencoded"
         $accessToken = $ConnectGraph.access_token
-        
-        $URLchatmessage = "https://graph.microsoft.com/v1.0/teams/$myTeamID/channels/$myChannelID/messages"
+        $URLchatmessage = "https://graph.microsoft.com/v1.0/teams/$global:TeamID/channels/$global:ChannelID/messages"
         
         $headers = @{
             "Authorization" = "Bearer $accessToken"
@@ -180,12 +176,11 @@ Function TeamsMessageGraphAPI {
         
         $messageBody = @{
             body = @{
-                content = $messageBody
+                content = $myBody
             }
-        } | ConvertTo-Json
+        } | ConvertTo-Json -Depth 3
         
-        $res = Invoke-RestMethod -Method POST -Uri $URLchatmessage -Body $messageBody -Headers $headers
-
+        $null = Invoke-RestMethod -Method POST -Uri $URLchatmessage -Body $messageBody -Headers $headers
     }
     catch {
         <#Do this if a terminating exception happens#>
@@ -199,7 +194,6 @@ Function ProcessAlert {
 
     try {
         $td = Get-Date
-
         Switch ($thisMetric){
             #"Health_Index"{$AlertMessage = @("Health Index Alert","$td --- Health Index alert triggered at $thisLocation.")}
             #"AQI"{$AlertMessage = @("AQI Alert","$td --- AQI alert triggered at $thisLocation.")}
@@ -208,6 +202,7 @@ Function ProcessAlert {
             #"CO2cal"{$AlertMessage = @("CO2 Alert","$td --- Temperature alert triggered at $thisLocation.")}
             #"Humidity"{$AlertMessage = @("Humidity Alert","$td --- Humidity alert triggered at $thisLocation.")}
             #"Temp_F"{$AlertMessage = @("Temperature Alert","$td --- Temperature alert triggered at $thisLocation.")}
+            #"Motion"{$AlertMessage = @("Motion Alert","$td --- Motion alert triggered at $thisLocation.")}
             "Vape"{$AlertMessage = @("Vape Detected","$td --- Vaping detected at $thisLocation.")}
             "THC"{$AlertMessage = @("THC Detected","$td --- THC detected at $thisLocation.")}
             "Masking"{$AlertMessage = @("Masking Detected","$td --- Masking detected at $thisLocation.")}
@@ -216,15 +211,12 @@ Function ProcessAlert {
             "Aggression"{$AlertMessage = @("Aggression Detected","$td --- Aggression detected at $thisLocation.")}
             "Tamper"{$AlertMessage = @("Tamper Detected","$td --- Tamper detected at $thisLocation.")}
             "Help"{$AlertMessage = @("Help Request Detected","$td --- Help request detected at $thisLocation.")}
-            #"Motion"{$AlertMessage = @("Motion Alert","$td --- Motion alert triggered at $thisLocation.")}
         }
-        
         If($global:DebugNotifications -eq $true){
-            $thisLocation = "Test"
+            $thisLocation = "Test Location"
             $AlertMessage = @("Test Message","$td --- This is a test notifications from $thisLocation")
             $global:DebugNotifications = $false
         }
-
         If($null -ne $AlertMessage) {
             If (CooldownExists $thisLocation $thisMetric) {
                 # Alert already on cooldown, do not send message
@@ -240,7 +232,6 @@ Function ProcessAlert {
                 }
                 Add-Cooldown $thisLocation $thisMetric
             }            
-            foreach($cd in $global:CooldownArray){Write-Host "$($cd.Name) - $($cd.Alert)"}
         }
     }
     catch {
@@ -296,6 +287,10 @@ Function Write-InfluxDB {
     }
 }
 
+#
+#
+#
+#
 # Create a new HttpListener object
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add($global:ListenerURL)
@@ -347,7 +342,7 @@ while ($listener.IsListening) {
                 $strEventsQry = ProcessEvents $queryParams
                 $EventsBody="HaloEvents,Location=$location $strEventsQry"
 
-                If($global:InfluxWriteEnable -eq $true) {
+                If(($global:InfluxWriteEnable -eq $true) -and ($strEventsQry -ne "Error")) {
                     Write-InfluxDB $EventsBody 
                 }
                 else {
