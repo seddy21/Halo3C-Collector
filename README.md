@@ -37,7 +37,10 @@ Hover over your new database and click on the Add Retention policy button. Give 
 
 1.	Copy the “HALO-Listener” powershell script to the server you intend to run it on.
 2.	Update the global variables found under “Update these variables” accordingly
-3.	Start the script.
+3.	Install the Microsoft.Graph sdk module: **_Install-Module -Name Microsoft.Graph_**
+4.	Start the script.
+
+**If you are going to use Teams notifications, you will need an Azure account with the "Teams Administrator" role.**
 
 **HALO 3C Configuration**
 
