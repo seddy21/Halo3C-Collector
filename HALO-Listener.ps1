@@ -2,12 +2,6 @@ Clear-Host
 [Console]::CursorVisible = $false
 Add-Type -AssemblyName System.Web
 
-Write-Host "Importing Modules ..." -ForegroundColor DarkMagenta
-
-Import-Module Microsoft.Graph.Teams
-
-Clear-Host
-
 ####
 #
 # Version 4
@@ -56,15 +50,31 @@ $global:InfluxURL = "$global:InfluxBaseURL/write?db=$global:InfluxDatabase&rp=$g
 $global:CooldownArray = New-Object System.Collections.ArrayList
 
 Function Post {
+    # Check if the module is imported or available
+    if (Get-Module-Name Microsoft.Graph) {
+        if (Get-Module -Name Microsoft.Graph.Teams) {
+            # The module Microsoft.Graph.Team Module is already imported.
+        } elseif (Get-Module -ListAvailable -Name Microsoft.Graph.Teams) {
+            Write-Host "Importing Modules ..." -ForegroundColor DarkMagenta
+            Import-Module Microsoft.Graph.Teams
+        } else {
+            Write-Host "The Microsoft.Graph.Teams module is not installed."
+            Write-Host "Please run: " -NoNewline;Write-Host "Install-Module -Name Microsoft.Graph.Teams -Scope CurrentUser" -ForegroundColor Cyan
+        }
+    } else {
+        Write-Host "The Microsoft Graph API SDK does not appear to be installed."
+        Write-Host "Please run: " -NoNewline;Write-Host "Install-Module -Name Microsoft.Graph -Scope CurrentUser" -ForegroundColor Cyan
+    }
+    Clear-Host
     Write-Host "HALO 3C Heartbeat data collection.." -ForegroundColor DarkYellow
-    Write-Host "Listening for incoming HTTP requests at: " -NoNewline;Write-Host $global:ListenerURL -ForegroundColor Cyan
-    Write-Host "Writing data to: " -NoNewline;Write-Host $InfluxURL -ForegroundColor Cyan
+    Write-Host "Listening for incoming HTTP requests at: " -NoNewline;Write-Host $global:ListenerURL -ForegroundColor White
+    Write-Host "Writing data to: " -NoNewline;Write-Host $InfluxURL -ForegroundColor White
 
     If($global:InfluxWriteEnable -eq $false){Write-Host "InfluxDB Writes Disabled!" -ForegroundColor Red}Else{Write-Host "InfluxDB Writes Enabled." -ForegroundColor Green}
     If($global:SMTPNotificationsEnable -eq $false){Write-Host "SMTP Notifications Disabled!" -ForegroundColor Red}Else{Write-Host "SMTP Notifications Enabled." -ForegroundColor Green}
     If($global:TeamsNotificationsEnable -eq $false){Write-Host "Teams Notifications Disabled!" -ForegroundColor Red}Else{Write-Host "Teams Notifications Enabled." -ForegroundColor Green}
 
-    Write-Host "Press [ESC] to stop listener.." -ForegroundColor Yellow
+    Write-Host "Press [1] to toggle SMTP notifications, [2] to toggle Teams notifications or [ESC] to stop listener.." -ForegroundColor Cyan
 }
 Function HandleError {
     [CmdletBinding()]
@@ -123,7 +133,7 @@ Function Add-Cooldown {
     }
     Return $null
 }
-# Function to clear expired alerts
+# Clear expired alerts
 Function Clear-Cooldown {
     try {        
     $currentTime = Get-Date
@@ -164,6 +174,10 @@ Function SMTPSend {
 Function TeamsMessageGraphAPI {
     [CmdletBinding()]
     Param([string] $myBody)
+
+    $myTenant = $global:TenantDomainName
+    $myTeamID =  $global:TeamId
+    $myChannelID = $global:ChannelID
 
     try {        
         $Body = @{
@@ -380,22 +394,31 @@ while ($listener.IsListening) {
     # Check cooldowns
     Clear-Cooldown
 
-    # Create 500 millisecond delay to allow for escape key press used to shutdown listener
-    for($i = 0;$i -lt 5; $i++){
+    # Create 1 second delay to allow for key press
+    for($i = 0;$i -lt 10; $i++){
         Start-Sleep -Milliseconds 100
         # Check if a key is available
         if ([console]::KeyAvailable) {
             # Check if the key pressed is Escape
-            $key = [console]::ReadKey($true)
-            if ($key.Key -eq 'Escape') {
-                Write-Host
-                Write-Host "Escape key pressed. Listener stopped.." -ForegroundColor Red
-                $listener.Stop()
-                break
+            $key = [console]::ReadKey($true).Key
+            switch ($key){
+                'Escape' {
+                    Write-Host
+                    Write-Host "Escape key pressed. Listener stopped.." -ForegroundColor Red
+                    $listener.Stop()
+                    break
+                }
+                'D1' {
+                    If ($global:SMTPNotificationsEnable -eq $false){$global:SMTPNotificationsEnable = $true}Else{$global:SMTPNotificationsEnable = $false}
+                    Post
+                }
+                'D2' {
+                    If ($global:TeamsNotificationsEnable -eq $false){$global:TeamsNotificationsEnable = $true}Else{$global:TeamsNotificationsEnable = $false}
+                    Post
+                }
             }
-        }       
-    }
-
+        }
+    }       
     Write-Host "`r$( ' ' * ($Host.UI.RawUI.WindowSize.Width - 1))`r" -NoNewline
     [Console]::CursorVisible = $false
 }
