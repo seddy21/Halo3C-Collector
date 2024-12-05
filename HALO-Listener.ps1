@@ -50,8 +50,8 @@ $global:InfluxURL = "$global:InfluxBaseURL/write?db=$global:InfluxDatabase&rp=$g
 $global:CooldownArray = New-Object System.Collections.ArrayList
 
 Function Post {
-    # Check if the module is imported or available
-    if (Get-Module-Name Microsoft.Graph) {
+    # Check if the Microsoft Graph module is imported or available
+    if (($global:TeamsNotificationsEnable -eq $true) -and (Get-Module-Name Microsoft.Graph)) {
         if (Get-Module -Name Microsoft.Graph.Teams) {
             # The module Microsoft.Graph.Team Module is already imported.
         } elseif (Get-Module -ListAvailable -Name Microsoft.Graph.Teams) {
