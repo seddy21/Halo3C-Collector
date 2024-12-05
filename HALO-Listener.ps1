@@ -175,6 +175,10 @@ Function TeamsMessageGraphAPI {
     [CmdletBinding()]
     Param([string] $myBody)
 
+    $myTenant = $global:TenantDomainName
+    $myTeamID =  $global:TeamId
+    $myChannelID = $global:ChannelID
+
     try {        
         $Body = @{
             Grant_Type    = "password"
@@ -253,6 +257,7 @@ Function ProcessAlert {
                 }
                 Add-Cooldown $thisLocation $thisMetric
             }            
+            foreach($cd in $global:CooldownArray){Write-Host "$($cd.Name) - $($cd.Alert)"}
         }
     }
     catch {
