@@ -2,12 +2,6 @@ Clear-Host
 [Console]::CursorVisible = $false
 Add-Type -AssemblyName System.Web
 
-Write-Host "Importing Modules ..." -ForegroundColor DarkMagenta
-
-Import-Module Microsoft.Graph.Teams
-
-Clear-Host
-
 ####
 #
 # Version 4
@@ -52,9 +46,36 @@ $global:TeamUser = '<azure / teams account>'                                # Re
 $global:TeamPass = '<azure / teams account password>'                       # Replace with Azure account password
 
 # Do not modify!!!
-$global:InfluxURL = "$InfluxBaseURL/write?db=$InfluxDatabase&rp=$InfluxRetentionPolicy"
+$global:InfluxURL = "$global:InfluxBaseURL/write?db=$global:InfluxDatabase&rp=$global:InfluxRetentionPolicy"
 $global:CooldownArray = New-Object System.Collections.ArrayList
 
+Function Post {
+    # Check if the module is imported or available
+    if (Get-Module-Name Microsoft.Graph) {
+        if (Get-Module -Name Microsoft.Graph.Teams) {
+            # The module Microsoft.Graph.Team Module is already imported.
+        } elseif (Get-Module -ListAvailable -Name Microsoft.Graph.Teams) {
+            Write-Host "Importing Modules ..." -ForegroundColor DarkMagenta
+            Import-Module Microsoft.Graph.Teams
+        } else {
+            Write-Host "The Microsoft.Graph.Teams module is not installed."
+            Write-Host "Please run: " -NoNewline;Write-Host "Install-Module -Name Microsoft.Graph.Teams -Scope CurrentUser" -ForegroundColor Cyan
+        }
+    } else {
+        Write-Host "The Microsoft Graph API SDK does not appear to be installed."
+        Write-Host "Please run: " -NoNewline;Write-Host "Install-Module -Name Microsoft.Graph -Scope CurrentUser" -ForegroundColor Cyan
+    }
+    Clear-Host
+    Write-Host "HALO 3C Heartbeat data collection.." -ForegroundColor DarkYellow
+    Write-Host "Listening for incoming HTTP requests at: " -NoNewline;Write-Host $global:ListenerURL -ForegroundColor White
+    Write-Host "Writing data to: " -NoNewline;Write-Host $InfluxURL -ForegroundColor White
+
+    If($global:InfluxWriteEnable -eq $false){Write-Host "InfluxDB Writes Disabled!" -ForegroundColor Red}Else{Write-Host "InfluxDB Writes Enabled." -ForegroundColor Green}
+    If($global:SMTPNotificationsEnable -eq $false){Write-Host "SMTP Notifications Disabled!" -ForegroundColor Red}Else{Write-Host "SMTP Notifications Enabled." -ForegroundColor Green}
+    If($global:TeamsNotificationsEnable -eq $false){Write-Host "Teams Notifications Disabled!" -ForegroundColor Red}Else{Write-Host "Teams Notifications Enabled." -ForegroundColor Green}
+
+    Write-Host "Press [1] to toggle SMTP notifications, [2] to toggle Teams notifications or [ESC] to stop listener.." -ForegroundColor Cyan
+}
 Function HandleError {
     [CmdletBinding()]
     Param($myError)
@@ -75,7 +96,7 @@ Function CooldownExists {
     
     try {        
         # Search the array for matching Location and Event
-        $exists = $CooldownArray | Where-Object {
+        $exists = $global:CooldownArray | Where-Object {
             $_.Name -eq $Loc -and $_.Alert -eq $Al
         }
         return $exists.Count -gt 0
@@ -100,7 +121,7 @@ Function Add-Cooldown {
         $timestamp = Get-Date
 
         # Add the event to the array
-        $res = $CooldownArray.Add([PSCustomObject]@{
+       [void]$global:CooldownArray.Add([PSCustomObject]@{
             Name  = $Loc
             Alert     = $Al
             Timestamp = $timestamp
@@ -112,12 +133,12 @@ Function Add-Cooldown {
     }
     Return $null
 }
-# Function to clear expired alerts
+# Clear expired alerts
 Function Clear-Cooldown {
     try {        
     $currentTime = Get-Date
-    $CooldownArray = $CooldownArray | Where-Object {
-        ($currentTime - $_.Timestamp).TotalMinutes -lt $Cooldown
+    $global:CooldownArray = $global:CooldownArray | Where-Object {
+        ($currentTime - $_.Timestamp).TotalMinutes -lt $global:Cooldown
     }
     }
     catch {
@@ -134,15 +155,15 @@ Function SMTPSend {
 
         # Create email object
         $email = New-Object System.Net.Mail.MailMessage
-        $email.From = $SMTPFrom
-        $email.To.Add($SMTPTo)
+        $email.From = $global:SMTPFrom
+        $email.To.Add($global:SMTPTo)
         $email.Subject = $subject
         $email.Body = $emailBody
 
         # Set SMTP server and credentials
-        $smtp = New-Object System.Net.Mail.SmtpClient($SMTPServer, $SMTPPort)
+        $smtp = New-Object System.Net.Mail.SmtpClient($global:SMTPServer, $global:SMTPPort)
         $smtp.EnableSSL = $false
-        $smtp.Credentials = New-Object System.Net.NetworkCredential($SMTPUser, $password)
+        $smtp.Credentials = New-Object System.Net.NetworkCredential($global:SMTPUser, $global:password)
 
         # Send email
         $smtp.Send($email)
@@ -152,22 +173,22 @@ Function SMTPSend {
 }
 Function TeamsMessageGraphAPI {
     [CmdletBinding()]
-    Param([string] $messageBody)
+    Param([string] $myBody)
 
     try {        
         $Body = @{
             Grant_Type    = "password"
             Scope         = "https://graph.microsoft.com/.default"
-            client_id     = $ClientID
-            client_secret = $ClientSecret
-            username      = $TeamUser
-            password      = $TeamPass
+            client_id     = $global:ClientID
+            client_secret = $global:ClientSecret
+            username      = $global:TeamUser
+            password      = $global:TeamPass
         }
         
-        $ConnectGraph = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$TenantDomainName/oauth2/v2.0/token" -Method POST -Body $Body
+         # -ContentType "application/x-www-form-urlencoded"
+        $ConnectGraph = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$global:TenantDomainName/oauth2/v2.0/token" -Method POST -Body $Body -ContentType "application/x-www-form-urlencoded"
         $accessToken = $ConnectGraph.access_token
-        
-        $URLchatmessage = "https://graph.microsoft.com/v1.0/teams/$TeamID/channels/$ChannelID/messages"
+        $URLchatmessage = "https://graph.microsoft.com/v1.0/teams/$global:TeamID/channels/$global:ChannelID/messages"
         
         $headers = @{
             "Authorization" = "Bearer $accessToken"
@@ -176,12 +197,11 @@ Function TeamsMessageGraphAPI {
         
         $messageBody = @{
             body = @{
-                content = $messageBody
+                content = $myBody
             }
-        } | ConvertTo-Json
+        } | ConvertTo-Json -Depth 3
         
-        $res = Invoke-RestMethod -Method POST -Uri $URLchatmessage -Body $messageBody -Headers $headers
-
+        $null = Invoke-RestMethod -Method POST -Uri $URLchatmessage -Body $messageBody -Headers $headers
     }
     catch {
         <#Do this if a terminating exception happens#>
@@ -195,7 +215,6 @@ Function ProcessAlert {
 
     try {
         $td = Get-Date
-
         Switch ($thisMetric){
             #"Health_Index"{$AlertMessage = @("Health Index Alert","$td --- Health Index alert triggered at $thisLocation.")}
             #"AQI"{$AlertMessage = @("AQI Alert","$td --- AQI alert triggered at $thisLocation.")}
@@ -204,6 +223,7 @@ Function ProcessAlert {
             #"CO2cal"{$AlertMessage = @("CO2 Alert","$td --- Temperature alert triggered at $thisLocation.")}
             #"Humidity"{$AlertMessage = @("Humidity Alert","$td --- Humidity alert triggered at $thisLocation.")}
             #"Temp_F"{$AlertMessage = @("Temperature Alert","$td --- Temperature alert triggered at $thisLocation.")}
+            #"Motion"{$AlertMessage = @("Motion Alert","$td --- Motion alert triggered at $thisLocation.")}
             "Vape"{$AlertMessage = @("Vape Detected","$td --- Vaping detected at $thisLocation.")}
             "THC"{$AlertMessage = @("THC Detected","$td --- THC detected at $thisLocation.")}
             "Masking"{$AlertMessage = @("Masking Detected","$td --- Masking detected at $thisLocation.")}
@@ -212,20 +232,23 @@ Function ProcessAlert {
             "Aggression"{$AlertMessage = @("Aggression Detected","$td --- Aggression detected at $thisLocation.")}
             "Tamper"{$AlertMessage = @("Tamper Detected","$td --- Tamper detected at $thisLocation.")}
             "Help"{$AlertMessage = @("Help Request Detected","$td --- Help request detected at $thisLocation.")}
-            #"Motion"{$AlertMessage = @("Motion Alert","$td --- Motion alert triggered at $thisLocation.")}
         }
-        
+        If($global:DebugNotifications -eq $true){
+            $thisLocation = "Test Location"
+            $AlertMessage = @("Test Message","$td --- This is a test notifications from $thisLocation")
+            $global:DebugNotifications = $false
+        }
         If($null -ne $AlertMessage) {
-            If (CooldownExists -Location $thisLocation -Alert $thisMetric) {
+            If (CooldownExists $thisLocation $thisMetric) {
                 # Alert already on cooldown, do not send message
             }
             Else {
                 # Send alert and add to cooldown
-                If($SMTPNotificationsEnable -eq $true) {
+                If($global:SMTPNotificationsEnable -eq $true) {
                     SMTPSend $AlertMessage[0] $AlertMessage[1]
                 }
-
-                If($TeamsNotificationsEnable -eq $true) {
+                
+                If($global:TeamsNotificationsEnable -eq $true) {
                     TeamsMessageGraphAPI $AlertMessage[1]
                 }
                 Add-Cooldown $thisLocation $thisMetric
@@ -285,20 +308,16 @@ Function Write-InfluxDB {
     }
 }
 
+#
+#
+#
+#
 # Create a new HttpListener object
 $listener = New-Object System.Net.HttpListener
-$listener.Prefixes.Add($ListenerURL)
+$listener.Prefixes.Add($global:ListenerURL)
 $listener.Start()
 
-Write-Host "HALO 3C Heartbeat data collection.." -ForegroundColor DarkYellow
-Write-Host "Listening for incoming HTTP requests at: " -NoNewline;Write-Host $ListenerURL -ForegroundColor Cyan
-Write-Host "Writing data to: " -NoNewline;Write-Host $InfluxURL -ForegroundColor Cyan
-
-If($InfluxWriteEnable -eq $false){Write-Host "InfluxDB Writes Disabled!" -ForegroundColor Red}Else{Write-Host "InfluxDB Writes Enabled." -ForegroundColor Green}
-If($SMTPNotificationsEnable -eq $false){Write-Host "SMTP Notifications Disabled!" -ForegroundColor Red}Else{Write-Host "SMTP Notifications Enabled." -ForegroundColor Green}
-If($TeamsNotificationsEnable -eq $false){Write-Host "Teams Notifications Disabled!" -ForegroundColor Red}Else{Write-Host "Teams Notifications Enabled." -ForegroundColor Green}
-
-Write-Host "Press [ESC] to stop listener.." -ForegroundColor Yellow
+Post
 
 # Infinite loop to keep the listener running
 while ($listener.IsListening) {
@@ -336,7 +355,7 @@ while ($listener.IsListening) {
                 $strEventsQry = ProcessEvents $queryParams
                 $EventsBody="HaloEvents,Location=$location $strEventsQry"
 
-                If($InfluxWriteEnable -eq $true) {
+                If(($global:InfluxWriteEnable -eq $true) -and ($strEventsQry -ne "Error")) {
                     Write-InfluxDB $EventsBody 
                 }
                 else {
@@ -371,22 +390,31 @@ while ($listener.IsListening) {
     # Check cooldowns
     Clear-Cooldown
 
-    # Create 500 millisecond delay to allow for escape key press used to shutdown listener
-    for($i = 0;$i -lt 5; $i++){
+    # Create 1 second delay to allow for key press
+    for($i = 0;$i -lt 10; $i++){
         Start-Sleep -Milliseconds 100
         # Check if a key is available
         if ([console]::KeyAvailable) {
             # Check if the key pressed is Escape
-            $key = [console]::ReadKey($true)
-            if ($key.Key -eq 'Escape') {
-                Write-Host
-                Write-Host "Escape key pressed. Listener stopped.." -ForegroundColor Red
-                $listener.Stop()
-                break
+            $key = [console]::ReadKey($true).Key
+            switch ($key){
+                'Escape' {
+                    Write-Host
+                    Write-Host "Escape key pressed. Listener stopped.." -ForegroundColor Red
+                    $listener.Stop()
+                    break
+                }
+                'D1' {
+                    If ($global:SMTPNotificationsEnable -eq $false){$global:SMTPNotificationsEnable = $true}Else{$global:SMTPNotificationsEnable = $false}
+                    Post
+                }
+                'D2' {
+                    If ($global:TeamsNotificationsEnable -eq $false){$global:TeamsNotificationsEnable = $true}Else{$global:TeamsNotificationsEnable = $false}
+                    Post
+                }
             }
-        }       
-    }
-
+        }
+    }       
     Write-Host "`r$( ' ' * ($Host.UI.RawUI.WindowSize.Width - 1))`r" -NoNewline
     [Console]::CursorVisible = $false
 }
