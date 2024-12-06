@@ -175,10 +175,6 @@ Function TeamsMessageGraphAPI {
     [CmdletBinding()]
     Param([string] $myBody)
 
-    $myTenant = $global:TenantDomainName
-    $myTeamID =  $global:TeamId
-    $myChannelID = $global:ChannelID
-
     try {        
         $Body = @{
             Grant_Type    = "password"
