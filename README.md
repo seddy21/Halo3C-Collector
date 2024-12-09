@@ -6,6 +6,7 @@
 3.	Click on the “Crown” icon (InfluxDB Admin) in the left nav. bar 
 4.	Create a new Database and give it a name. VapeDetectors is “default” in the powershell listener script.
 5.	The “autogen” retention policy will keep data indefinitely. You cannot edit the autogen policy.
+6.	To run InfluxDB as a service, use the “Non-Sucking Service Manager” found here: https://nssm.cc/download
 
  You can have multiple retention policies on a database. For my purposes I create one named “DYNAMIC”, meaning for now I’ll retain data for 365 days, but I might change my mind and edit it to 90 days or whatever.
 
