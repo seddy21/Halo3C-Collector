@@ -2,7 +2,7 @@
 **InfluxDB Setup**
 
 1.	Visit: https://influxdata.com/downloads/ to download and install the latest InfluxDB.
-2.	Once Influx is installed, open a web-browser to port 8888 of your Influx server. This should take you to Chronograf.
+2.	Once Influx is installed and running, open a web-browser to port 8888 of your Influx server. This should take you to Chronograf.
 3.	Click on the “Crown” icon (InfluxDB Admin) in the left nav. bar 
 4.	Create a new Database and give it a name. VapeDetectors is “default” in the powershell listener script.
 5.	The “autogen” retention policy will keep data indefinitely. You cannot edit the autogen policy.
@@ -14,9 +14,9 @@ Hover over your new database and click on the Add Retention policy button. Give 
 **Grafana Setup**
 
 1.	Visit: https://grafana.com/grafana/download to download and install the latest Grafana.
-2.	Once Grafana is installed, open a web-browser to your Grafana server.
-3.	After logging in, hover on the Configuration button (Gear icon, bottom left nav. bar) and click the “Data sources” button.
-4.	Add an InfluxDB datasource:
+2.	Once Grafana is installed and running, open a web-browser to your Grafana server.
+3.	After logging in, expand the Connections tree in the left navigation menu and click "Data sources".
+4.	Click the "Blue Add new data source button" and add an InfluxDB datasource:
    
     - Name: Something that makes sense. I used “InfluxDB (VapeDetectors)”
     - Query Language: Should default to InfluxQL
@@ -26,8 +26,8 @@ Hover over your new database and click on the Add Retention policy button. Give 
     - Everything else can stay default.
     - Click the Save & test button
   	
-6.	Hove over the Dashboards icon (four little squares) and select “Import”
-7.	Click the “Upload JSON” file and select the “HALO3C-Dashboard.json” file included with this document.
+6.	Click the Dashboards icon (four little squares) in the left navigation, then click the drop down on the New menu and select “Import”
+7.	Drag and drop the “HALO3C-Dashboard.json”.
     - Name: Leave as default or change … up to you.
     - Data Source: Select the InfluxDB datasource you previously created.
     - Click Import
@@ -36,7 +36,7 @@ Hover over your new database and click on the Add Retention policy button. Give 
 **Powershell Listener Setup**
 
 1.	Copy the “HALO-Listener” powershell script to the server you intend to run it on.
-2.	Update the global variables found under “Update these variables” accordingly
+2.	Update the global variables found under “Update these variables” accordingly.
 3.	Install the Microsoft.Graph sdk module: **_Install-Module -Name Microsoft.Graph_**
 4.	Start the script.
 
