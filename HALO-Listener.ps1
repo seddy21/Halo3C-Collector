@@ -47,7 +47,7 @@ $global:TeamPass = '<azure / teams account password>'                       # Re
 
 # Do not modify!!!
 $global:InfluxURL = "$global:InfluxBaseURL/write?db=$global:InfluxDatabase&rp=$global:InfluxRetentionPolicy"
-$global:CooldownArray = New-Object System.Collections.ArrayList
+$global:CooldownArray = [System.Collections.ArrayList]::new()
 
 Function Post {
     # Check if the Microsoft Graph module is imported or available
@@ -137,9 +137,9 @@ Function Add-Cooldown {
 Function Clear-Cooldown {
     try {        
     $currentTime = Get-Date
-    $global:CooldownArray = $global:CooldownArray | Where-Object {
+    $global:CooldownArray = @($global:CooldownArray | Where-Object {
         ($currentTime - $_.Timestamp).TotalMinutes -lt $global:Cooldown
-    }
+    })    
     }
     catch {
         <#Do this if a terminating exception happens#>
